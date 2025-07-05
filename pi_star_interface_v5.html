@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pi-Star Live by 4X5ZB @ 2025</title>
+<style>
+    body {
+      font-family: monospace;
+      background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+      color: #0ff;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: #111;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 20px #000;
+    }
+    h1 {
+      text-align: center;
+      color: #00ffff;
+    }
+    .field {
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      padding: 10px;
+    }
+    .label {
+      color: #ff0;
+      font-size: 12px;
+    }
+    .value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #0ff;
+    }
+    #last-callsign-value {
+      color: #ff0;
+      font-weight: bold;
+    }
+    .log-line {
+      color: #ccc;
+      margin-top: 20px;
+      font-size: 12px;
+      white-space: pre-line;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Pi-Star Live</h1>
+<div class="field">
+  <div class="label">Callsign</div>
+  <div class="value" id="callsign">--</div>
+  <div class="info-card" id="last-callsign">Last Callsign: <span id="last-callsign-value">--</span></div>
+</div>
+<div class="field"><div class="label">TG</div><div class="value" id="tg">--</div></div>
+<div class="field"><div class="label">DMR ID</div><div class="value" id="dmrid">--</div></div>
+<div class="field"><div class="label">Full Name</div><div class="value" id="fullname">--</div></div>
+<div class="field"><div class="label">Country</div><div class="value" id="country">--</div></div>
+<div class="field"><div class="label">City</div><div class="value" id="city">--</div></div>
+<div class="field"><div class="label">BER</div><div class="value" id="ber">--</div></div>
+<div class="field"><div class="label">Loss (%)</div><div class="value" id="loss">--</div></div>
+<div class="log-line" id="log">--</div>
+</div>
+<script>
+const LOG_URL = 'http://pi-star.local/live_log.php';
+
+async function fetchPiStarLog() {
+  try {
+    const res = await fetch(LOG_URL, {cache: "no-store"});
+    if (!res.ok) throw new Error("Log fetch failed");
+    const text = await res.text();
+    parseLogLine(text);
+  } catch (e) {
+    console.error("Fetch error:", e);
+  }
+}
+
+function parseLogLine(text) {
+  const lines = text.split("\n").reverse();
+  for (let line of lines) {
+    if (line.includes("from") && line.includes("to TG")) {
+      document.getElementById("log").textContent = line;
+      const match = line.match(/from\s+(\w+)\s+to TG (\d+)/);
+      const ber = line.match(/BER:\s*([\d.]+)/);
+      const loss = line.match(/loss.*?(\d+)%/);
+      const callsign = match?.[1] || "--";
+      const tg = match?.[2] || "--";
+      const berVal = ber?.[1] || "--";
+      const lossVal = loss?.[1] || "--";
+
+      updateCallsignDisplay(callsign);
+      document.getElementById("callsign").textContent = callsign;
+      document.getElementById("tg").textContent = tg;
+      document.getElementById("ber").textContent = berVal;
+      document.getElementById("loss").textContent = lossVal;
+      fetchDMRIDFromCallsign(callsign);
+      break;
+    }
+  }
+}
+
+async function fetchDMRIDFromCallsign(callsign) {
+  try {
+    const res = await fetch(`https://radioid.net/api/dmr/user/?callsign=${callsign}`);
+    if (!res.ok) throw new Error("Callsign lookup failed");
+    const json = await res.json();
+    const record = json?.results?.[0];
+    if (record) {
+      document.getElementById("dmrid").textContent = record.id || "--";
+      document.getElementById("fullname").textContent = (record.fname + " " + record.surname).trim() || "--";
+      document.getElementById("country").textContent = record.country || "--";
+      document.getElementById("city").textContent = record.city || "--";
+    } else {
+      throw new Error("No record found");
+    }
+  } catch (e) {
+    document.getElementById("dmrid").textContent = "--";
+    document.getElementById("fullname").textContent = "--";
+    document.getElementById("country").textContent = "--";
+    document.getElementById("city").textContent = "--";
+  }
+}
+
+let previousCallsign = '--';
+function updateCallsignDisplay(newCallsign) {
+  if (newCallsign !== previousCallsign) {
+    document.getElementById("last-callsign-value").textContent = previousCallsign;
+    previousCallsign = newCallsign;
+  }
+}
+
+fetchPiStarLog();
+setInterval(fetchPiStarLog, 3000);
+</script>
+</body>
+</html>
