@@ -50,7 +50,7 @@ This project provides a mobile-friendly HTML interface for Pi-Star that displays
 
 ## 📸 Interface Preview
 
-![Pi-Star Interface Preview](preview.png)
+![Pi-Star Interface Preview](interface_preview.png)
 
 ---
 
