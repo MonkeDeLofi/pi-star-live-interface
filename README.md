@@ -61,3 +61,11 @@ Feel free to connect via DMR or leave a comment!
 ## 📜 License
 
 This project is open under the [MIT License](https://opensource.org/licenses/MIT).
+
+## ☕ Support This Project
+
+I’ve put a lot of time and passion into building this Pi-Star live interface for the ham radio community.  
+If you found it useful and would like to support further development, consider buying me a coffee 💙
+
+[![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.me/MonkeDeLofi)
+
