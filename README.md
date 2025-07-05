@@ -43,7 +43,7 @@ This project provides a mobile-friendly HTML interface for Pi-Star that displays
    ```
 7. **Access the interface** in your browser:
    ```
-   http://pi-star.local/dashboard/pi_star_interface_v5.html
+   http://pi-star.local/pi_star_interface_v5.html
    ```
 
 ---
