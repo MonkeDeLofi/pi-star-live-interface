@@ -54,7 +54,7 @@ This project provides a mobile-friendly HTML interface for Pi-Star that displays
 
 ---
 
-## 📡 Created by: Kfir - 4X5ZB 🇮🇱
+## 📡 Created by: Kfir - 4X5ZB 
 
 Feel free to connect via DMR or leave a comment!
 
