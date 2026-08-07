@@ -6,12 +6,14 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 
 ---
 
-## ✨ Features (v7)
+## ✨ Features (v8)
 
 - 🔴 **ON AIR indicator** — blinking banner showing who is transmitting right now
 - ⏱️ **Live TX timer** — running duration counter during an active transmission; final duration, BER and packet loss shown when it ends
 - 📻 **Talker Alias** — station name decoded directly from the DMR stream (instant, no internet lookup needed)
 - 🌍 **Country flags** — resolved from RadioID data or callsign prefix (~100 prefixes), rendered as images so they work on **all** operating systems including Windows
+- 🕐 **Local time at the speaker's QTH** — live ticking clock in the transmitting station's timezone
+- 🌡️ **Local temperature & weather** — current conditions at the speaker's city with weather emoji (via the free Open-Meteo API, no key required)
 - 📋 **Last Heard table** — the last 8 transmissions with time, callsign + flag, TG, duration, BER and source
 - 🔵 **NET / RF source indicator** — color-coded network vs. local RF traffic
 - 👤 **Station info** — DMR ID, full name, country and city via RadioID.net
@@ -25,7 +27,7 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 
 | File | Purpose |
 |------|---------|
-| `pi_star_interface_v7.html` | The main live dashboard |
+| `pi_star_interface_v8.html` | The main live dashboard |
 | `live_log.php` | Backend: streams the MMDVM log **and** proxies RadioID lookups with caching |
 | `interface_preview.png` | Screenshot of the interface |
 
@@ -55,21 +57,21 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
    rpi-rw
    ```
 
-5. **Use WinSCP** to connect to `pi-star.local` via SCP and upload `live_log.php` and `pi_star_interface_v7.html` into `/home/pi-star/`
+5. **Use WinSCP** to connect to `pi-star.local` via SCP and upload `live_log.php` and `pi_star_interface_v8.html` into `/home/pi-star/`
 6. **Back in the SSH terminal**, move the files:
 
    ```
-   sudo mv /home/pi-star/pi_star_interface_v7.html /var/www/dashboard/
+   sudo mv /home/pi-star/pi_star_interface_v8.html /var/www/dashboard/
    sudo mv /home/pi-star/live_log.php /var/www/dashboard/
    ```
 
 7. **Open the dashboard** in your browser:
 
    ```
-   http://pi-star.local/pi_star_interface_v7.html
+   http://pi-star.local/pi_star_interface_v8.html
    ```
 
-   > 💡 Works via direct IP too (e.g. `http://192.168.1.50/pi_star_interface_v7.html`) — all URLs are relative.
+   > 💡 Works via direct IP too (e.g. `http://192.168.1.50/pi_star_interface_v8.html`) — all URLs are relative.
 
 ---
 
@@ -78,11 +80,17 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 - The page polls `live_log.php` every 3 seconds, which tails the latest `/var/log/pi-star/MMDVM-*.log`.
 - Voice **headers** drive the live display (callsign, TG, slot, source); voice **end-of-transmission** lines provide duration, BER and packet loss.
 - Talker Alias frames are parsed straight from the log and cached per callsign.
+- Local time & weather: the city from RadioID is geocoded via Open-Meteo (coordinates + timezone), the clock ticks client-side, and current temperature is fetched with a 10-minute cache. Open-Meteo supports CORS so the browser calls it directly - free, no API key.
 - Station lookups go through `live_log.php?mode=lookup&callsign=X` — the Pi fetches from RadioID.net and caches the JSON in `/tmp/dmr_lookup_cache/` for 7 days. This avoids browser CORS restrictions entirely.
 
 ---
 
 ## 📜 Changelog
+
+**v8** *(2026-08)*
+- Local time at the speaker's QTH (live ticking clock, timezone via Open-Meteo geocoding)
+- Current temperature + weather emoji at the speaker's city (Open-Meteo, cached 10 min)
+- City disambiguation by ISO country code (e.g. Springfield AU vs. US)
 
 **v7** *(2026-08)*
 - Talker Alias decoding + display (also used as name fallback)

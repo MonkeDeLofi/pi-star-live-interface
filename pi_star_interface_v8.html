@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pi-Star Live by 4X5ZB @ 2026</title>
+<style>
+  body {
+    font-family: monospace;
+    background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+    color: #0ff;
+    padding: 20px;
+    margin: 0;
+  }
+  .container {
+    max-width: 520px;
+    margin: auto;
+    background: #111;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 0 20px #000;
+  }
+  h1 { text-align: center; color: #00ffff; margin: 5px 0 15px; }
+
+  /* --- ON AIR indicator --- */
+  #onair {
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    background: #222;
+    color: #666;
+    border: 1px solid #333;
+    transition: all .3s;
+  }
+  #onair.active {
+    background: #300;
+    color: #ff3b3b;
+    border-color: #ff3b3b;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 50% { opacity: .55; } }
+
+  .field {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 10px;
+  }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; margin-bottom: 10px; }
+  .label { color: #ff0; font-size: 12px; }
+  .value { font-size: 18px; font-weight: bold; color: #0ff; word-break: break-all; }
+  .value.small { font-size: 15px; }
+  #last-callsign-value { color: #ff0; font-weight: bold; }
+  #alias { color: #f9a825; font-size: 12px; margin-top: 4px; }
+  .src-net { color: #4fc3f7; }
+  .src-rf  { color: #81c784; }
+  .flag-img { vertical-align: -2px; margin-right: 6px; border-radius: 2px; box-shadow: 0 0 3px #000; }
+  .live-timer { color: #ff3b3b !important; }
+
+  /* --- Last Heard table --- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 5px;
+  }
+  th { color: #ff0; text-align: left; border-bottom: 1px solid #444; padding: 4px; }
+  td { color: #0ff; padding: 4px; border-bottom: 1px solid #2a2a2a; }
+  tr:first-child td { color: #fff; }
+
+  .log-line {
+    color: #ccc;
+    margin-top: 15px;
+    font-size: 11px;
+    white-space: pre-line;
+    max-height: 90px;
+    overflow-y: auto;
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 8px;
+  }
+  .footer { text-align:center; color:#555; font-size:11px; margin-top:12px; }
+  .stale { opacity: .5; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Pi-Star Live</h1>
+
+<div id="onair">STANDBY</div>
+
+<div class="field">
+  <div class="label">Callsign</div>
+  <div class="value" id="callsign">--</div>
+  <div id="alias"></div>
+  <div id="last-callsign" style="font-size:12px; margin-top:4px;">Last Callsign: <span id="last-callsign-value">--</span></div>
+</div>
+
+<div class="row">
+  <div class="field"><div class="label">TG / Dest</div><div class="value" id="tg">--</div></div>
+  <div class="field"><div class="label">Slot</div><div class="value" id="slot">--</div></div>
+  <div class="field"><div class="label">Source</div><div class="value small" id="src">--</div></div>
+</div>
+
+<div class="field"><div class="label">DMR ID</div><div class="value" id="dmrid">--</div></div>
+<div class="field"><div class="label">Full Name</div><div class="value small" id="fullname">--</div></div>
+
+<div class="row">
+  <div class="field"><div class="label">Country</div><div class="value small" id="country">--</div></div>
+  <div class="field"><div class="label">City</div><div class="value small" id="city">--</div></div>
+</div>
+
+<div class="row">
+  <div class="field"><div class="label">Local Time</div><div class="value" id="localtime">--</div></div>
+  <div class="field"><div class="label">Temp</div><div class="value" id="temp">--</div></div>
+</div>
+
+<div class="row">
+  <div class="field"><div class="label">Duration (s)</div><div class="value" id="dur">--</div></div>
+  <div class="field"><div class="label">BER (%)</div><div class="value" id="ber">--</div></div>
+  <div class="field"><div class="label">Loss (%)</div><div class="value" id="loss">--</div></div>
+</div>
+
+<div class="field">
+  <div class="label">Last Heard</div>
+  <table>
+    <thead><tr><th>Time</th><th>Callsign</th><th>TG</th><th>Dur</th><th>BER</th><th>Src</th></tr></thead>
+    <tbody id="lastheard"></tbody>
+  </table>
+</div>
+
+<div class="log-line" id="log">--</div>
+<div class="footer">Pi-Star Live v8 · 4X5ZB © 2026</div>
+</div>
+
+<script>
+/* ===================== הגדרות ===================== */
+const LOG_URL    = 'live_log.php';
+const LOOKUP_URL = 'live_log.php?mode=lookup&callsign=';
+const POLL_MS    = 3000;
+const MAX_HEARD  = 8;
+
+/* ===================== מצב פנימי ===================== */
+let previousCallsign = '--';
+let currentCallsign  = null;    // מי משדר כרגע
+let txStartClient    = null;    // זמן תחילת שידור (שעון הדפדפן) — לטיימר החי
+const lookupCache = {};         // cache פרטי תחנות
+const aliasCache  = {};         // callsign -> Talker Alias מהלוג
+const lastHeard = [];
+let lastLogTs = 0;
+
+/* ===================== דגלי מדינות ===================== */
+// Windows לא מציג דגלי אמוג'י — משתמשים בתמונות SVG קטנות מ-flagcdn
+// (עובד בכל דפדפן ומערכת הפעלה)
+function flagImg(iso, size) {
+  if (!iso) return '';
+  const h = size === 'big' ? '24x18' : '20x15';
+  // אם התמונה לא נטענת (אין אינטרנט וכו') — מציגים את קוד המדינה כטקסט
+  return `<img class="flag-img" src="https://flagcdn.com/${h}/${iso.toLowerCase()}.png" ` +
+         `alt="${iso}" onerror="this.outerHTML='<span style=&quot;color:#888;font-size:10px;margin-right:4px&quot;>'+this.alt+'</span>'">`;
+}
+
+// מיפוי שמות מדינות (כפי שחוזרים מ-radioid.net) לקוד ISO
+const COUNTRY_ISO = {
+  "united states": "US", "israel": "IL", "australia": "AU", "sweden": "SE",
+  "italy": "IT", "germany": "DE", "united kingdom": "GB", "canada": "CA",
+  "brazil": "BR", "japan": "JP", "spain": "ES", "france": "FR",
+  "netherlands": "NL", "belgium": "BE", "switzerland": "CH", "austria": "AT",
+  "poland": "PL", "portugal": "PT", "denmark": "DK", "norway": "NO",
+  "finland": "FI", "ireland": "IE", "new zealand": "NZ", "south africa": "ZA",
+  "argentina": "AR", "mexico": "MX", "korea": "KR", "korea s, republic of": "KR",
+  "china": "CN", "taiwan": "TW", "india": "IN", "thailand": "TH",
+  "indonesia": "ID", "philippines": "PH", "russia": "RU", "ukraine": "UA",
+  "greece": "GR", "turkey": "TR", "czech republic": "CZ", "slovakia": "SK",
+  "hungary": "HU", "romania": "RO", "bulgaria": "BG", "croatia": "HR",
+  "slovenia": "SI", "serbia": "RS", "luxembourg": "LU", "malta": "MT",
+  "cyprus": "CY", "singapore": "SG", "malaysia": "MY", "chile": "CL",
+  "colombia": "CO", "uruguay": "UY", "venezuela": "VE", "ecuador": "EC",
+  "iceland": "IS", "estonia": "EE", "latvia": "LV", "lithuania": "LT"
+};
+
+// fallback — זיהוי מדינה לפי prefix של אות הקריאה (ממוין מהארוך לקצר)
+const PREFIX_ISO = [
+  ["4X","IL"],["4Z","IL"],["HB9","CH"],["HB3","CH"],["2E","GB"],
+  ["VK","AU"],["VE","CA"],["VA","CA"],["ZL","NZ"],["ZS","ZA"],
+  ["PY","BR"],["PU","BR"],["PP","BR"],["JA","JP"],["JH","JP"],["JR","JP"],
+  ["SM","SE"],["SA","SE"],["SE","SE"],["LA","NO"],["LB","NO"],
+  ["OH","FI"],["OZ","DK"],["ON","BE"],["PA","NL"],["PD","NL"],["PE","NL"],
+  ["OE","AT"],["SP","PL"],["SQ","PL"],["OK","CZ"],["OM","SK"],
+  ["HA","HU"],["HG","HU"],["YO","RO"],["LZ","BG"],["SV","GR"],["TA","TR"],
+  ["UA","RU"],["UR","UA"],["UT","UA"],["EI","IE"],["CT","PT"],
+  ["EA","ES"],["EB","ES"],["EC","ES"],["ED","ES"],
+  ["IU","IT"],["IZ","IT"],["IK","IT"],["IW","IT"],["I0","IT"],["I1","IT"],
+  ["I2","IT"],["I3","IT"],["I4","IT"],["I5","IT"],["I6","IT"],["I7","IT"],["I8","IT"],["I9","IT"],
+  ["DL","DE"],["DB","DE"],["DC","DE"],["DD","DE"],["DF","DE"],["DG","DE"],
+  ["DH","DE"],["DJ","DE"],["DK","DE"],["DM","DE"],["DO","DE"],
+  ["F","FR"],["G","GB"],["M","GB"],["K","US"],["W","US"],["N","US"],["A","US"],
+  ["LU","AR"],["XE","MX"],["HL","KR"],["DS","KR"],["BV","TW"],["BY","CN"],
+  ["YV","VE"],["CE","CL"],["HK","CO"],["OA","PE"],["CX","UY"],["HC","EC"],["TI","CR"],["HP","PA"],
+  ["VU","IN"],["9V","SG"],["HS","TH"],["DU","PH"],
+  ["YB","ID"],["YC","ID"],["YD","ID"],["YE","ID"],["YF","ID"],["YG","ID"],["YH","ID"],
+  ["TF","IS"],["ES","EE"],["YL","LV"],["LY","LT"],["9A","HR"],["S5","SI"],["YU","RS"]
+].sort((a,b) => b[0].length - a[0].length);
+
+// מחזיר קוד ISO של המדינה (לא אמוג'י) — התצוגה נעשית עם flagImg
+function flagForCallsign(callsign, countryName) {
+  // עדיפות ראשונה: שם המדינה מ-radioid
+  if (countryName) {
+    const iso = COUNTRY_ISO[countryName.toLowerCase().trim()];
+    if (iso) return iso;
+  }
+  // עדיפות שנייה: prefix של אות הקריאה
+  const base = (callsign || '').split('/')[0].toUpperCase();
+  for (const [pfx, iso] of PREFIX_ISO) {
+    if (base.startsWith(pfx)) return iso;
+  }
+  return '';
+}
+
+/* ===================== קריאת הלוג ===================== */
+async function fetchPiStarLog() {
+  try {
+    const res = await fetch(LOG_URL + '?t=' + Date.now(), {cache: "no-store"});
+    if (!res.ok) throw new Error("Log fetch failed");
+    const text = await res.text();
+    lastLogTs = Date.now();
+    document.querySelector('.container').classList.remove('stale');
+    parseLog(text);
+  } catch (e) {
+    console.error("Fetch error:", e);
+    if (Date.now() - lastLogTs > 15000) {
+      document.querySelector('.container').classList.add('stale');
+    }
+  }
+}
+
+/* ===================== ניתוח שורות הלוג ===================== */
+const RE_HEADER = /DMR Slot (\d).*?received (network|RF)\s.*?(?:voice|data) header from ([A-Za-z0-9\/\-]+) to (TG )?(\d+)/;
+const RE_LATE   = /DMR Slot (\d).*?received (network|RF) late entry from ([A-Za-z0-9\/\-]+) to (TG )?(\d+)/;
+const RE_END    = /DMR Slot (\d).*?received (network|RF) end of (?:voice )?transmission from ([A-Za-z0-9\/\-]+) to (TG )?(\d+),\s*([\d.]+) seconds(?:,\s*(\d+)% packet loss)?(?:,\s*BER:\s*([\d.]+)%)?/;
+const RE_WDOG   = /DMR Slot (\d).*?(network|RF)? ?watchdog has expired(?:,\s*([\d.]+) seconds)?(?:,\s*(\d+)% packet loss)?(?:,\s*BER:\s*([\d.]+)%)?/;
+const RE_ALIAS  = /Talker Alias(?: block \d+)?\s+"([^"]+)"/;
+const RE_TIME   = /^M: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/;
+
+function parseLog(text) {
+  const lines = text.split("\n").filter(l => l.trim().length > 0);
+  let sawActiveTx = false;
+
+  for (const line of lines) {
+    const tsMatch = line.match(RE_TIME);
+    const ts = tsMatch ? tsMatch[1].split(' ')[1] : '';
+
+    let m;
+    if ((m = line.match(RE_HEADER)) || (m = line.match(RE_LATE))) {
+      // שידור התחיל
+      if (currentCallsign !== m[3]) txStartClient = Date.now();  // איפוס טיימר רק על משדר חדש
+      currentCallsign = m[3];
+      sawActiveTx = true;
+      setLive(m[3], m[5], m[1], m[2]);
+    } else if ((m = line.match(RE_ALIAS))) {
+      // Talker Alias — השם ישירות מהרדיו!
+      if (currentCallsign) {
+        aliasCache[currentCallsign.split('/')[0]] = m[1];
+        showAlias(m[1]);
+      }
+    } else if ((m = line.match(RE_END))) {
+      // סיום שידור — נתוני איכות אמיתיים
+      const rec = {
+        time: ts, callsign: m[3], tg: m[5], slot: m[1],
+        src: m[2], dur: m[6] || '--',
+        loss: (m[7] !== undefined) ? m[7] : '--',
+        ber: (m[8] !== undefined) ? m[8] : '--'
+      };
+      addLastHeard(rec);
+      if (currentCallsign === m[3]) { currentCallsign = null; txStartClient = null; }
+      // הצגת נתוני הסיום
+      setQuality(rec.dur, rec.ber, rec.loss);
+    } else if ((m = line.match(RE_WDOG))) {
+      // הרשת נקטעה באמצע שידור
+      if (currentCallsign) {
+        const rec = {
+          time: ts, callsign: currentCallsign,
+          tg: document.getElementById("tg").textContent,
+          slot: m[1], src: m[2] || 'network',
+          dur: m[3] || '--', loss: m[4] ?? '--', ber: m[5] ?? '--'
+        };
+        addLastHeard(rec);
+        currentCallsign = null; txStartClient = null;
+        setQuality(rec.dur, rec.ber, rec.loss);
+      }
+    }
+  }
+
+  // עדכון חיווי ON AIR
+  const onair = document.getElementById("onair");
+  if (currentCallsign) {
+    onair.textContent = "● ON AIR — " + currentCallsign;
+    onair.classList.add("active");
+  } else {
+    onair.textContent = "STANDBY";
+    onair.classList.remove("active");
+  }
+
+  document.getElementById("log").textContent = lines.slice(-3).join("\n");
+}
+
+/* ===================== טיימר חי בזמן שידור ===================== */
+// רץ כל חצי שנייה — בזמן שידור פעיל מציג משך רץ, BER/Loss בהמתנה
+setInterval(() => {
+  const durEl = document.getElementById("dur");
+  if (currentCallsign && txStartClient) {
+    const secs = ((Date.now() - txStartClient) / 1000).toFixed(1);
+    durEl.textContent = secs;
+    durEl.classList.add("live-timer");
+    document.getElementById("ber").textContent  = "…";
+    document.getElementById("loss").textContent = "…";
+  } else {
+    durEl.classList.remove("live-timer");
+  }
+  // תקתוק השעון המקומי של המשדר
+  renderLocalTime();
+}, 500);
+
+function setQuality(dur, ber, loss) {
+  const durEl = document.getElementById("dur");
+  durEl.classList.remove("live-timer");
+  durEl.textContent = dur;
+  document.getElementById("ber").textContent  = ber;
+  document.getElementById("loss").textContent = loss;
+}
+
+/* ===================== עדכון תצוגה חיה ===================== */
+function setLive(callsign, tg, slot, src) {
+  updateCallsignDisplay(callsign);
+  document.getElementById("callsign").textContent = callsign;
+  document.getElementById("tg").textContent   = tg;
+  document.getElementById("slot").textContent = slot;
+  const srcEl = document.getElementById("src");
+  srcEl.textContent = src.toUpperCase() === 'RF' ? 'RF' : 'NET';
+  srcEl.className = 'value small ' + (src.toUpperCase() === 'RF' ? 'src-rf' : 'src-net');
+
+  // Talker Alias שמור מהעבר — מציגים מיד
+  const base = callsign.split('/')[0];
+  showAlias(aliasCache[base] || '');
+
+  fetchStationInfo(callsign);
+}
+
+function showAlias(alias) {
+  document.getElementById("alias").textContent = alias ? "📻 " + alias : "";
+}
+
+function updateCallsignDisplay(newCallsign) {
+  if (newCallsign !== previousCallsign && previousCallsign !== '--') {
+    document.getElementById("last-callsign-value").textContent = previousCallsign;
+  }
+  if (newCallsign !== previousCallsign) previousCallsign = newCallsign;
+}
+
+/* ===================== Last Heard ===================== */
+function addLastHeard(rec) {
+  const top = lastHeard[0];
+  if (top && top.time === rec.time && top.callsign === rec.callsign) return;
+  // דגל לפי המידע הזמין כרגע (יתעדכן מה-cache אם יש)
+  const info = lookupCache[rec.callsign.split('/')[0]];
+  rec.flag = flagForCallsign(rec.callsign, info?.country);
+  lastHeard.unshift(rec);
+  if (lastHeard.length > MAX_HEARD) lastHeard.pop();
+  renderLastHeard();
+}
+
+function renderLastHeard() {
+  const tbody = document.getElementById("lastheard");
+  tbody.innerHTML = lastHeard.map(r =>
+    `<tr><td>${r.time}</td><td>${flagImg(r.flag)}${r.callsign}</td><td>${r.tg}</td>` +
+    `<td>${r.dur}</td><td>${r.ber}</td>` +
+    `<td class="${r.src.toUpperCase()==='RF'?'src-rf':'src-net'}">${r.src.toUpperCase()==='RF'?'RF':'NET'}</td></tr>`
+  ).join("");
+}
+
+/* ===================== שליפת פרטי תחנה ===================== */
+async function fetchStationInfo(callsign) {
+  const base = callsign.split('/')[0];
+
+  if (base in lookupCache) { applyStationInfo(lookupCache[base], callsign); return; }
+
+  try {
+    const res = await fetch(LOOKUP_URL + encodeURIComponent(base));
+    if (!res.ok) throw new Error("lookup failed");
+    const json = await res.json();
+    const record = json?.results?.[0] || null;
+    lookupCache[base] = record;
+    applyStationInfo(record, callsign);
+  } catch (e) {
+    applyStationInfo(null, callsign);
+  }
+}
+
+function applyStationInfo(record, callsign) {
+  document.getElementById("dmrid").textContent = record?.id ?? "--";
+
+  // שם מלא: radioid קודם, ואם אין — Talker Alias מהלוג
+  const base = (callsign || '').split('/')[0];
+  let name = record ? ((record.fname || '') + ' ' + (record.surname || '')).trim() : '';
+  if (!name && aliasCache[base]) name = aliasCache[base];
+  document.getElementById("fullname").textContent = name || "--";
+
+  const iso = flagForCallsign(callsign, record?.country);
+  document.getElementById("country").innerHTML =
+    flagImg(iso, 'big') + (record?.country ?? "--");
+  document.getElementById("city").textContent = record?.city ?? "--";
+
+  // שעה מקומית + טמפרטורה לפי העיר של המשדר
+  updateCityExtras(record?.city, record?.country);
+}
+
+/* ===================== שעה מקומית + מזג אוויר (Open-Meteo) ===================== */
+// Open-Meteo — חינמי, בלי מפתח API, תומך CORS (הדפדפן פונה ישירות)
+let currentTz = null;           // אזור הזמן של המשדר הנוכחי
+const geoCache = {};            // "city|country" -> {lat, lon, tz}
+const weatherCache = {};        // "city|country" -> {temp, code, ts}
+const WEATHER_TTL = 10 * 60 * 1000;   // תוקף מזג אוויר: 10 דקות
+
+// המרת קוד WMO לאמוג'י מזג אוויר
+function weatherEmoji(code) {
+  if (code === 0) return "☀️";
+  if (code <= 2)  return "🌤️";
+  if (code === 3) return "☁️";
+  if (code <= 48) return "🌫️";
+  if (code <= 67) return "🌧️";
+  if (code <= 77) return "🌨️";
+  if (code <= 82) return "🌧️";
+  if (code <= 86) return "🌨️";
+  return "⛈️";
+}
+
+async function updateCityExtras(city, country) {
+  // איפוס — עד שיגיע מידע חדש
+  currentTz = null;
+  document.getElementById("localtime").textContent = "--";
+  document.getElementById("temp").textContent = "--";
+  if (!city) return;
+
+  const key = city + "|" + (country || '');
+  try {
+    // שלב 1: geocoding — עיר → קואורדינטות + אזור זמן (עם cache)
+    let geo = geoCache[key];
+    if (geo === null) return;          // חיפוש קודם נכשל — לא מנסים שוב
+    if (!geo) {
+      const res = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=5&language=en&format=json`);
+      if (!res.ok) throw new Error("geocoding failed");
+      const j = await res.json();
+      let r = j?.results?.[0];
+      // אם יש כמה ערים באותו שם — מעדיפים התאמה למדינה מ-radioid
+      // ההשוואה לפי country_code (ISO) כי שם המדינה מ-Open-Meteo חוזר בשפה המקומית
+      if (country && j?.results) {
+        const expectedIso = COUNTRY_ISO[country.toLowerCase().trim()];
+        if (expectedIso) {
+          const match = j.results.find(x => x.country_code === expectedIso);
+          if (match) r = match;
+        }
+      }
+      if (!r) { geoCache[key] = null; return; }
+      geo = { lat: r.latitude, lon: r.longitude, tz: r.timezone };
+      geoCache[key] = geo;
+    }
+    currentTz = geo.tz;
+    renderLocalTime();
+
+    // שלב 2: טמפרטורה נוכחית (עם cache של 10 דקות)
+    const wc = weatherCache[key];
+    if (wc && Date.now() - wc.ts < WEATHER_TTL) { renderTemp(wc); return; }
+    const wres = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current=temperature_2m,weather_code`);
+    if (!wres.ok) throw new Error("weather failed");
+    const wj = await wres.json();
+    const w = {
+      temp: wj?.current?.temperature_2m,
+      code: wj?.current?.weather_code,
+      ts: Date.now()
+    };
+    if (w.temp !== undefined) { weatherCache[key] = w; renderTemp(w); }
+  } catch (e) {
+    console.error("city extras error:", e);
+  }
+}
+
+function renderLocalTime() {
+  if (!currentTz) return;
+  try {
+    const t = new Intl.DateTimeFormat('en-GB', {
+      timeZone: currentTz, hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(new Date());
+    document.getElementById("localtime").textContent = t;
+  } catch (e) { /* אזור זמן לא מוכר לדפדפן */ }
+}
+
+function renderTemp(w) {
+  document.getElementById("temp").textContent =
+    (w.temp !== undefined) ? `${w.temp}°C ${weatherEmoji(w.code)}` : "--";
+}
+
+/* ===================== התחלה ===================== */
+fetchPiStarLog();
+setInterval(fetchPiStarLog, POLL_MS);
+</script>
+</body>
+</html>
