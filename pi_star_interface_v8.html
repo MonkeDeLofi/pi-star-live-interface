@@ -135,7 +135,7 @@
 </div>
 
 <div class="log-line" id="log">--</div>
-<div class="footer">Pi-Star Live v8 · 4X5ZB © 2026</div>
+<div class="footer">Pi-Star Live v8.1 · 4X5ZB © 2026</div>
 </div>
 
 <script>
@@ -247,6 +247,17 @@ const RE_WDOG   = /DMR Slot (\d).*?(network|RF)? ?watchdog has expired(?:,\s*([\
 const RE_ALIAS  = /Talker Alias(?: block \d+)?\s+"([^"]+)"/;
 const RE_TIME   = /^M: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/;
 
+/* --- YSF (System Fusion) — פורמט לוג שונה לגמרי מ-DMR ---
+ * RF פתיחה:   "YSF, received RF header from KC1OCY     to ALL"
+ * רשת:        "YSF, received network data from KC1OCY     to ALL        at W1XYZ"
+ * RF סיום:    "YSF, received RF end of transmission from KC1OCY to ALL, 3.5 seconds, BER: 0.4%"
+ * סיום רשת:   "YSF, network watchdog has expired, 2.1 seconds, 0.0% packet loss, BER: 0.0%"
+ * (ברשת YSF אין שורת end — ה-watchdog הוא סימן הסיום)
+ */
+const RE_YSF_HDR  = /YSF, received (RF|network) (?:header|data) from ([A-Za-z0-9\/\-]+) +to +([A-Za-z0-9\/\-]+)/;
+const RE_YSF_END  = /YSF, received (RF|network) end of transmission from ([A-Za-z0-9\/\-]+) +to +([A-Za-z0-9\/\-]+),\s*([\d.]+) seconds(?:,\s*([\d.]+)% packet loss)?(?:,\s*BER:\s*([\d.]+)%)?/;
+const RE_YSF_WDOG = /YSF, (?:network )?watchdog has expired(?:,\s*([\d.]+) seconds)?(?:,\s*([\d.]+)% packet loss)?(?:,\s*BER:\s*([\d.]+)%)?/;
+
 function parseLog(text) {
   const lines = text.split("\n").filter(l => l.trim().length > 0);
   let sawActiveTx = false;
@@ -288,6 +299,37 @@ function parseLog(text) {
           tg: document.getElementById("tg").textContent,
           slot: m[1], src: m[2] || 'network',
           dur: m[3] || '--', loss: m[4] ?? '--', ber: m[5] ?? '--'
+        };
+        addLastHeard(rec);
+        currentCallsign = null; txStartClient = null;
+        setQuality(rec.dur, rec.ber, rec.loss);
+      }
+    } else if ((m = line.match(RE_YSF_END))) {
+      // YSF: סיום שידור RF (עם BER; loss רק אם קיים)
+      const rec = {
+        time: ts, callsign: m[2], tg: m[3], slot: 'YSF',
+        src: m[1], dur: m[4] || '--',
+        loss: m[5] ?? '--', ber: m[6] ?? '--'
+      };
+      addLastHeard(rec);
+      if (currentCallsign === m[2]) { currentCallsign = null; txStartClient = null; }
+      setQuality(rec.dur, rec.ber, rec.loss);
+    } else if ((m = line.match(RE_YSF_HDR))) {
+      // YSF: תחילת שידור (RF header או network data)
+      // ברשת YSF שורת ה-data חוזרת על עצמה כל frame — מציבים רק אם זה משדר חדש
+      if (currentCallsign !== m[2]) {
+        txStartClient = Date.now();
+        currentCallsign = m[2];
+        setLive(m[2], m[3], 'YSF', m[1]);
+      }
+    } else if ((m = line.match(RE_YSF_WDOG))) {
+      // YSF: סיום שידור רשת (אין שורת end — ה-watchdog סוגר)
+      if (currentCallsign) {
+        const rec = {
+          time: ts, callsign: currentCallsign,
+          tg: document.getElementById("tg").textContent,
+          slot: 'YSF', src: 'network',
+          dur: m[1] || '--', loss: m[2] ?? '--', ber: m[3] ?? '--'
         };
         addLastHeard(rec);
         currentCallsign = null; txStartClient = null;
@@ -364,8 +406,8 @@ function updateCallsignDisplay(newCallsign) {
 
 /* ===================== Last Heard ===================== */
 function addLastHeard(rec) {
-  const top = lastHeard[0];
-  if (top && top.time === rec.time && top.callsign === rec.callsign) return;
+  // dedup מלא — הלוג מפוענח מחדש בכל poll, אז רשומה עשויה לחזור שוב ושוב
+  if (lastHeard.some(r => r.time === rec.time && r.callsign === rec.callsign)) return;
   // דגל לפי המידע הזמין כרגע (יתעדכן מה-cache אם יש)
   const info = lookupCache[rec.callsign.split('/')[0]];
   rec.flag = flagForCallsign(rec.callsign, info?.country);

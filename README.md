@@ -8,6 +8,7 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 
 ## ✨ Features (v8)
 
+- 📡 **DMR & YSF (System Fusion) support** — parses both log formats automatically
 - 🔴 **ON AIR indicator** — blinking banner showing who is transmitting right now
 - ⏱️ **Live TX timer** — running duration counter during an active transmission; final duration, BER and packet loss shown when it ends
 - 📻 **Talker Alias** — station name decoded directly from the DMR stream (instant, no internet lookup needed)
@@ -86,6 +87,10 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 ---
 
 ## 📜 Changelog
+
+**v8.1** *(2026-08)*
+- YSF (System Fusion) support — RF/network headers, end-of-transmission, watchdog close
+- Fixed possible duplicate rows in Last Heard on quiet hotspots
 
 **v8** *(2026-08)*
 - Local time at the speaker's QTH (live ticking clock, timezone via Open-Meteo geocoding)
