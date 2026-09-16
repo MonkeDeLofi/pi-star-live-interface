@@ -88,6 +88,9 @@ A mobile-friendly, retro-style live dashboard for **Pi-Star** that displays real
 
 ## 📜 Changelog
 
+**v8.2** *(2026-08)*
+- Added a Full Name column to the Last Heard table (backfilled from RadioID / Talker Alias as lookups arrive)
+
 **v8.1** *(2026-08)*
 - YSF (System Fusion) support — RF/network headers, end-of-transmission, watchdog close
 - Fixed possible duplicate rows in Last Heard on quiet hotspots

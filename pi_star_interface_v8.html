@@ -69,9 +69,11 @@
     font-size: 12px;
     margin-top: 5px;
   }
-  th { color: #ff0; text-align: left; border-bottom: 1px solid #444; padding: 4px; }
-  td { color: #0ff; padding: 4px; border-bottom: 1px solid #2a2a2a; }
+  th { color: #ff0; text-align: left; border-bottom: 1px solid #444; padding: 4px 3px; }
+  td { color: #0ff; padding: 4px 3px; border-bottom: 1px solid #2a2a2a; }
   tr:first-child td { color: #fff; }
+  /* Full Name column — allow it to wrap/shrink so the table stays on one screen */
+  th:nth-child(3), td:nth-child(3) { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .log-line {
     color: #ccc;
@@ -129,13 +131,13 @@
 <div class="field">
   <div class="label">Last Heard</div>
   <table>
-    <thead><tr><th>Time</th><th>Callsign</th><th>TG</th><th>Dur</th><th>BER</th><th>Src</th></tr></thead>
+    <thead><tr><th>Time</th><th>Callsign</th><th>Full Name</th><th>TG</th><th>Dur</th><th>BER</th><th>Src</th></tr></thead>
     <tbody id="lastheard"></tbody>
   </table>
 </div>
 
 <div class="log-line" id="log">--</div>
-<div class="footer">Pi-Star Live v8.1 · 4X5ZB © 2026</div>
+<div class="footer">Pi-Star Live v8.2 · 4X5ZB © 2026</div>
 </div>
 
 <script>
@@ -405,12 +407,22 @@ function updateCallsignDisplay(newCallsign) {
 }
 
 /* ===================== Last Heard ===================== */
+// שם מלא מתוך ה-cache הקיים: radioid קודם, אחריו Talker Alias מהלוג
+function nameFromCache(callsign) {
+  const base = (callsign || '').split('/')[0];
+  const info = lookupCache[base];
+  let name = info ? ((info.fname || '') + ' ' + (info.surname || '')).trim() : '';
+  if (!name && aliasCache[base]) name = aliasCache[base];
+  return name || '--';
+}
+
 function addLastHeard(rec) {
   // dedup מלא — הלוג מפוענח מחדש בכל poll, אז רשומה עשויה לחזור שוב ושוב
   if (lastHeard.some(r => r.time === rec.time && r.callsign === rec.callsign)) return;
-  // דגל לפי המידע הזמין כרגע (יתעדכן מה-cache אם יש)
+  // דגל ושם לפי המידע הזמין כרגע (יתעדכנו מה-cache כשה-lookup יחזור)
   const info = lookupCache[rec.callsign.split('/')[0]];
   rec.flag = flagForCallsign(rec.callsign, info?.country);
+  rec.name = nameFromCache(rec.callsign);
   lastHeard.unshift(rec);
   if (lastHeard.length > MAX_HEARD) lastHeard.pop();
   renderLastHeard();
@@ -419,7 +431,7 @@ function addLastHeard(rec) {
 function renderLastHeard() {
   const tbody = document.getElementById("lastheard");
   tbody.innerHTML = lastHeard.map(r =>
-    `<tr><td>${r.time}</td><td>${flagImg(r.flag)}${r.callsign}</td><td>${r.tg}</td>` +
+    `<tr><td>${r.time}</td><td>${flagImg(r.flag)}${r.callsign}</td><td>${r.name || '--'}</td><td>${r.tg}</td>` +
     `<td>${r.dur}</td><td>${r.ber}</td>` +
     `<td class="${r.src.toUpperCase()==='RF'?'src-rf':'src-net'}">${r.src.toUpperCase()==='RF'?'RF':'NET'}</td></tr>`
   ).join("");
@@ -456,6 +468,19 @@ function applyStationInfo(record, callsign) {
   document.getElementById("country").innerHTML =
     flagImg(iso, 'big') + (record?.country ?? "--");
   document.getElementById("city").textContent = record?.city ?? "--";
+
+  // עדכון שורות קיימות בטבלת Last Heard של אותה תחנה — עכשיו שיש שם/מדינה
+  let changed = false;
+  for (const r of lastHeard) {
+    if (r.callsign.split('/')[0] === base) {
+      const newName = nameFromCache(r.callsign);
+      const newFlag = flagForCallsign(r.callsign, record?.country);
+      if (r.name !== newName || r.flag !== newFlag) {
+        r.name = newName; r.flag = newFlag; changed = true;
+      }
+    }
+  }
+  if (changed) renderLastHeard();
 
   // שעה מקומית + טמפרטורה לפי העיר של המשדר
   updateCityExtras(record?.city, record?.country);
